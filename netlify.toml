@@ -1,0 +1,85 @@
+# Ascend ICT Script Engine — Netlify config
+# Static site + serverless function for AI module.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Friendly /api/* paths that map to function URLs
+[[redirects]]
+  from = "/api/ai"
+  to = "/.netlify/functions/ai"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-task"
+  to = "/.netlify/functions/fub-task"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-smartlist"
+  to = "/.netlify/functions/fub-smartlist"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-note"
+  to = "/.netlify/functions/fub-note"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-stage"
+  to = "/.netlify/functions/fub-stage"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-tags"
+  to = "/.netlify/functions/fub-tags"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-appointment"
+  to = "/.netlify/functions/fub-appointment"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-users"
+  to = "/.netlify/functions/fub-users"
+  status = 200
+
+[[redirects]]
+  from = "/api/fub-lead-context"
+  to = "/.netlify/functions/fub-lead-context"
+  status = 200
+
+[[redirects]]
+  from = "/api/transcribe"
+  to = "/.netlify/functions/transcribe"
+  status = 200
+
+# Security + iframe-embedding headers
+# Allows the engine to be embedded as a FUB iframe app.
+# Adjust frame-ancestors if you embed from other origins.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://eia.followupboss.com https://embed.followupboss.com https://embeddedapps.followupboss.com https://*.followupboss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.followupboss.com; connect-src 'self' https://*.followupboss.com; frame-ancestors 'self' https://app.followupboss.com https://*.followupboss.com"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "microphone=(), geolocation=(), camera=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Cache-Control = "no-cache, must-revalidate"
+
+# HTML files: never cache (so script updates push instantly)
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+# SPA-style redirect (only one page right now, harmless to leave)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

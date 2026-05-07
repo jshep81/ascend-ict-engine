@@ -1,0 +1,10 @@
+# Fallback header config (Netlify reads this if netlify.toml is missing).
+# Mirrors netlify.toml. If both exist, netlify.toml wins.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://eia.followupboss.com https://embed.followupboss.com https://embeddedapps.followupboss.com https://*.followupboss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.followupboss.com; connect-src 'self' https://*.followupboss.com; frame-ancestors 'self' https://app.followupboss.com https://*.followupboss.com
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=(), geolocation=(), camera=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cache-Control: no-cache, must-revalidate

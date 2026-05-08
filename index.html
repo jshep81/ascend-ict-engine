@@ -905,6 +905,46 @@ body.is-embed .app { display: none !important; }
 }
 .copy-fub-now-btn:hover { opacity: 0.92; }
 .copy-fub-now-btn:disabled { opacity: 0.55; cursor: wait; }
+/* FUB dropdown — secondary actions in notes header */
+.fub-dropdown { position: relative; display: inline-block; }
+.fub-dropdown-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  background: var(--panel, #fff);
+  color: var(--ink);
+  border: 1px solid var(--line-strong, #d6d3cc);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fub-dropdown-btn:hover { background: var(--bg-soft, #f7f5ee); }
+.fub-caret { font-size: 9px; margin-left: 2px; opacity: 0.7; }
+.fub-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--line-strong, #d6d3cc);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  padding: 4px;
+  z-index: 200;
+}
+.fub-dropdown-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.fub-dropdown-menu button:hover { background: var(--bg-soft, #f7f5ee); }
 .notes-pushed-banner {
   background: #fef9e7;
   border: 1px solid #f4d27a;
@@ -1896,11 +1936,6 @@ button.next-btn-inline:hover {
     <div class="actions">
       <span class="timer" id="timer"><span class="dot-live"></span><span id="timer-text">00:00</span></span>
       <button class="tinted" onclick="openQueuePanel()" id="queue-btn-header">Lead Queue</button>
-      <button class="tinted" onclick="emailSummary()">Email Call Note</button>
-      <button class="tinted" id="email-agent-btn" onclick="emailAgent()" title="Email the call note to the assigned agent on the loaded FUB lead">Email Assigned Agent</button>
-      <button class="tinted" onclick="copySummary()">Copy FUB note</button>
-      <button class="tinted" onclick="sendNoteToFUB()" title="Push the call note directly into the FUB lead's record">Send to FUB</button>
-      <button class="tinted" onclick="syncTagsToFUB()" title="Add suggested tags from call captures to the FUB lead">Sync Tags</button>
       <button class="tinted" onclick="resetCall()">New call</button>
     </div>
   </header>
@@ -1949,6 +1984,18 @@ button.next-btn-inline:hover {
             <button class="ai-inline ghost" onclick="openAIPanel('polish')" title="Polish notes with AI"><span class="ai-inline-icon">✦</span> Polish</button>
             <button class="ai-inline ghost" onclick="openAIPanel()" title="Ask AI for help"><span class="ai-inline-icon">✦</span> Ask AI</button>
             <button class="copy-fub-now-btn" id="copy-fub-now-btn" onclick="copyNotesToFubNow()" title="Push current notes to FUB now — keep typing, only new content goes in next time">↗ Copy to FUB now</button>
+            <button class="copy-fub-now-btn" id="send-summary-btn" onclick="sendNoteToFUB()" title="Send the full structured call summary to FUB at wrap-up" style="background: #2c5f3f; border-color: #2c5f3f;">↗ Send Summary</button>
+            <div class="fub-dropdown">
+              <button class="fub-dropdown-btn" id="fub-dropdown-btn" onclick="toggleFubDropdown(event)" title="Other FUB actions">FUB <span class="fub-caret">▾</span></button>
+              <div class="fub-dropdown-menu" id="fub-dropdown-menu" style="display:none;">
+                <button onclick="syncTagsToFUB(); closeFubDropdown();">Sync Tags to FUB</button>
+                <button onclick="createFubTask(); closeFubDropdown();">Create Task in FUB</button>
+                <button onclick="emailSummary(); closeFubDropdown();">Email Call Note</button>
+                <button onclick="emailAgent(); closeFubDropdown();">Email Assigned Agent</button>
+                <button onclick="copySummary(); closeFubDropdown();">Copy summary to clipboard</button>
+                <button onclick="openInFUB(); closeFubDropdown();">Open lead in FUB ↗</button>
+              </div>
+            </div>
             <button class="next-btn-inline" id="notes-next-btn" onclick="goNext()" style="display:none;">Next →</button>
           </div>
         </div>
@@ -5135,6 +5182,26 @@ async function syncTagsToFUB() {
     toast("FUB tag error: " + err.message);
   }
 }
+
+// ----------------------------------------------------------------------------
+// FUB dropdown — secondary actions menu in the notes header.
+// ----------------------------------------------------------------------------
+function toggleFubDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById("fub-dropdown-menu");
+  if (!menu) return;
+  const open = menu.style.display === "block";
+  menu.style.display = open ? "none" : "block";
+}
+function closeFubDropdown() {
+  const menu = document.getElementById("fub-dropdown-menu");
+  if (menu) menu.style.display = "none";
+}
+// Close the dropdown when clicking anywhere else on the page.
+document.addEventListener("click", (e) => {
+  const dd = document.querySelector(".fub-dropdown");
+  if (dd && !dd.contains(e.target)) closeFubDropdown();
+});
 
 // ----------------------------------------------------------------------------
 // Copy notes to FUB NOW — for live in-call pushes.

@@ -1296,6 +1296,28 @@ button.next-btn-inline:hover {
 .right-rail .appt-compact .appt-actions-row { flex-direction: column; gap: 6px; margin-top: 10px; }
 .right-rail .appt-compact .dns-fub-btn,
 .right-rail .appt-compact .ai-inline { font-size: 11.5px; padding: 6px 10px; width: 100%; justify-content: center; }
+
+/* Callingly webphone panel — top of right rail */
+.webphone-panel { padding: 0; margin-bottom: 12px; overflow: hidden; }
+.webphone-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-soft, #fafafa); }
+.webphone-header h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; }
+.webphone-controls { display: flex; gap: 8px; align-items: center; }
+.webphone-status { font-size: 12px; line-height: 1; color: #c0c0c0; transition: color 200ms; }
+.webphone-status.live { color: #2ecc71; }
+.webphone-status.ringing { color: #f39c12; animation: webphone-pulse 1s infinite; }
+.webphone-status.error { color: #e74c3c; }
+@keyframes webphone-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.webphone-toggle { background: transparent; border: 1px solid var(--line); border-radius: 4px; width: 22px; height: 22px; font-size: 13px; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 0; }
+.webphone-toggle:hover { background: var(--line); }
+.webphone-frame-wrap { position: relative; height: 520px; transition: height 200ms ease; }
+.webphone-frame-wrap iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.webphone-fallback { padding: 24px; text-align: center; font-size: 12.5px; color: var(--ink-soft); }
+.webphone-fallback a { color: var(--accent); font-weight: 600; }
+.webphone-panel.collapsed .webphone-frame-wrap { height: 0; }
+.webphone-panel.collapsed .webphone-toggle { transform: rotate(0); }
+.webphone-panel.collapsed .webphone-toggle::before { content: "+"; }
+.webphone-panel.collapsed .webphone-toggle { font-size: 0; }
+.webphone-panel.collapsed .webphone-toggle::before { font-size: 13px; }
 .dns-helper { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 .dns-actions-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
 .appt-actions-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
@@ -1921,6 +1943,29 @@ button.next-btn-inline:hover {
     </main>
 
     <aside class="right-rail">
+      <section class="panel webphone-panel" id="webphone-panel">
+        <div class="webphone-header">
+          <h2>Callingly Phone</h2>
+          <div class="webphone-controls">
+            <span class="webphone-status" id="webphone-status" title="Webhook auto-pop status">●</span>
+            <button class="webphone-toggle" id="webphone-toggle" onclick="toggleWebphone()" title="Collapse / expand">−</button>
+          </div>
+        </div>
+        <div class="webphone-frame-wrap" id="webphone-frame-wrap">
+          <iframe
+            id="webphone-frame"
+            src="https://phone.callingly.com/"
+            allow="microphone; autoplay; clipboard-write"
+            referrerpolicy="strict-origin-when-cross-origin"
+            title="Callingly Webphone"
+          ></iframe>
+          <div class="webphone-fallback" id="webphone-fallback" style="display:none;">
+            <p>Callingly blocked the embed.</p>
+            <a href="https://phone.callingly.com/" target="_blank" rel="noopener">Open phone in new tab</a>
+          </div>
+        </div>
+      </section>
+
       <section class="panel pre-call-brief" id="pre-call-brief" style="display:none;"></section>
 
       <section class="panel dns-panel dns-compact">
@@ -6908,18 +6953,146 @@ window.addEventListener("message", (event) => {
   }
 });
 
+// ============================================================================
+// CALLINGLY WEBPHONE — embedded iframe + auto-pop polling
+// ============================================================================
+// Two pieces working together:
+//   1. <iframe> embed of phone.callingly.com so the ICT never leaves the engine.
+//   2. Polling /api/active-call every 5 sec — when Callingly fires its webhook,
+//      our backend writes the call state to a Netlify Blob keyed by agent
+//      email. This poll finds it and auto-loads the FUB lead. The iframe
+//      itself is sandboxed (cross-origin), so we can't read state from it
+//      directly — that's exactly why the webhook path matters.
+
+function toggleWebphone() {
+  const panel = document.getElementById("webphone-panel");
+  const btn = document.getElementById("webphone-toggle");
+  if (!panel) return;
+  panel.classList.toggle("collapsed");
+  if (btn) btn.textContent = panel.classList.contains("collapsed") ? "+" : "−";
+  try { localStorage.setItem("ASCEND_WEBPHONE_COLLAPSED", panel.classList.contains("collapsed") ? "1" : "0"); } catch (e) {}
+}
+
+function restoreWebphoneState() {
+  try {
+    if (localStorage.getItem("ASCEND_WEBPHONE_COLLAPSED") === "1") {
+      const panel = document.getElementById("webphone-panel");
+      const btn = document.getElementById("webphone-toggle");
+      if (panel) panel.classList.add("collapsed");
+      if (btn) btn.textContent = "+";
+    }
+  } catch (e) {}
+}
+
+// Detect if Callingly blocks the embed — if the iframe never fires `load`
+// within 6 seconds, surface the fallback link.
+function watchWebphoneEmbed() {
+  const frame = document.getElementById("webphone-frame");
+  const fallback = document.getElementById("webphone-fallback");
+  if (!frame) return;
+  let loaded = false;
+  frame.addEventListener("load", () => { loaded = true; });
+  setTimeout(() => {
+    if (!loaded && fallback) {
+      console.warn("[Webphone] iframe did not fire load — likely X-Frame-Options block");
+      frame.style.display = "none";
+      fallback.style.display = "block";
+    }
+  }, 6000);
+}
+
+// ----------------------------------------------------------------------------
+// Active-call poller — backed by Callingly webhook → Netlify Blob
+// ----------------------------------------------------------------------------
+const ACTIVE_CALL_POLL_MS = 5000;
+let activeCallTimer = null;
+let lastSeenCallId = null;
+
+function getRepEmailForPolling() {
+  // We need the rep's email to key the poll. Pull from FUB users list +
+  // the saved rep first name. Falls back to localStorage override.
+  try {
+    const override = localStorage.getItem("ASCEND_REP_EMAIL");
+    if (override) return override.toLowerCase().trim();
+  } catch (e) {}
+  const repFirst = (typeof getRepFirstName === "function") ? getRepFirstName() : "";
+  if (!repFirst) return "";
+  const users = (typeof fubUsersCache !== "undefined" && fubUsersCache) ? fubUsersCache : [];
+  const match = users.find(u => {
+    const n = (u.name || u.firstName || "").toLowerCase();
+    return n.startsWith(repFirst.toLowerCase());
+  });
+  return match && match.email ? match.email.toLowerCase().trim() : "";
+}
+
+function setWebphoneStatus(state) {
+  const dot = document.getElementById("webphone-status");
+  if (!dot) return;
+  dot.classList.remove("live", "ringing", "error");
+  if (state === "live") { dot.classList.add("live"); dot.title = "Webhook connected — waiting for calls"; }
+  else if (state === "ringing") { dot.classList.add("ringing"); dot.title = "Active call detected — auto-loading lead"; }
+  else if (state === "error") { dot.classList.add("error"); dot.title = "Webhook polling error"; }
+  else { dot.title = "Webhook idle"; }
+}
+
+async function pollActiveCall() {
+  const email = getRepEmailForPolling();
+  if (!email) { setWebphoneStatus("idle"); return; }
+  try {
+    const url = "/api/active-call?email=" + encodeURIComponent(email);
+    const res = await fetch(url, { headers: { "X-Ascend-Secret": ASCEND_AI_SECRET } });
+    if (!res.ok) { setWebphoneStatus("error"); return; }
+    const data = await res.json();
+    if (!data.active) { setWebphoneStatus("live"); return; }
+    setWebphoneStatus("ringing");
+    // Same callId as last seen? Already loaded — skip.
+    if (data.callId && data.callId === lastSeenCallId) return;
+    if (!data.fubPersonId) {
+      console.log("[ActiveCall] Call detected but no matching FUB person:", data);
+      return;
+    }
+    lastSeenCallId = data.callId;
+    console.log("[ActiveCall] Auto-loading FUB person", data.fubPersonId, "from Callingly call", data.callId);
+    // Inject personId into URL so autoLoadFromEmbedParams picks it up
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("personId", data.fubPersonId);
+      if (data.fubLead && data.fubLead.firstName) u.searchParams.set("firstName", data.fubLead.firstName);
+      if (data.fubLead && data.fubLead.lastName) u.searchParams.set("lastName", data.fubLead.lastName);
+      if (data.leadPhone) u.searchParams.set("phone", data.leadPhone);
+      window.history.replaceState({}, "", u.toString());
+    } catch (e) {}
+    autoLoadFromEmbedParams();
+    if (typeof toast === "function") toast(`Incoming: ${data.fubLead && data.fubLead.firstName || "lead"}`);
+  } catch (err) {
+    console.warn("[ActiveCall] poll failed:", err);
+    setWebphoneStatus("error");
+  }
+}
+
+function startActiveCallPolling() {
+  if (activeCallTimer) clearInterval(activeCallTimer);
+  pollActiveCall(); // immediate kick
+  activeCallTimer = setInterval(pollActiveCall, ACTIVE_CALL_POLL_MS);
+}
+
 // init
 syncTrackOnLoad();
 renderRoleSelector();
 renderTrackSelector();
 bindLeadInfo(); bindNotes(); bindInsight(); bindDNS(); renderAll();
 applyEmbedChrome();
+restoreWebphoneState();
+watchWebphoneEmbed();
 // Pull FUB team users in the background so the rep-name dropdown
 // and reassignment dropdown populate without a manual refresh click.
 try { loadFubUsers(); } catch (e) { console.warn("loadFubUsers failed on init:", e); }
 // If running inside FUB, wait for the SDK handshake then load the lead.
 // Outside FUB, this falls through to URL-param auto-load.
 try { loadFromFubSDK(); } catch (e) { console.warn("loadFromFubSDK failed:", e); }
+// Start the Callingly auto-pop poller. Safe to run even if no rep set yet —
+// it'll just no-op until the rep name is chosen.
+try { startActiveCallPolling(); } catch (e) { console.warn("startActiveCallPolling failed:", e); }
 </script>
 </body>
 </html>

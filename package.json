@@ -1,0 +1,15 @@
+{
+  "name": "ascend-ict-engine",
+  "version": "1.0.0",
+  "description": "Ascend ICT script + note-taking engine — static site + Netlify Functions",
+  "private": true,
+  "scripts": {
+    "noop": "echo \"static site — no build step needed\""
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

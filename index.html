@@ -5373,19 +5373,18 @@ function populateRepNameDropdown() {
   }
 
   // ============================================================================
-  // ICT ROSTER — hardcoded allowlist for the 7 inside conversion team members.
-  // Edit this array when you hire / fire / promote. Match is case-insensitive
-  // and tolerant of partial matches (full name OR first+last).
+  // ICT ROSTER — hardcoded allowlist for the inside conversion team.
+  // Edit this array when you hire / fire / promote. Matcher is tolerant —
+  // strips suffixes (Jr, Sr, II, III) and matches by first + last name parts,
+  // so "Ben Lawrence Jr" in this list will match "Ben Lawrence" in FUB.
   // ============================================================================
   const ASCEND_ICT_ROSTER = [
+    "Justin Sheppard",
     "Adam Williams",
     "Jean Guinang",
-    "Ben Lawrence Jr",
+    "Ben Laurena",
     "Rao Hamza",
-    "Mary Lawrence",
-    // Add the two new hires here:
-    // "First Last",
-    // "First Last",
+    "Mary Lawrence"
   ];
 
   const active = (fubUsersCache || []).filter(u => u.status !== "Disabled" && u.status !== "Inactive");
@@ -5398,25 +5397,49 @@ function populateRepNameDropdown() {
     return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}</option>`;
   };
 
+  // Strip generation suffixes and split into significant name parts (≥2 chars).
+  const nameParts = (s) => (s || "")
+    .toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|esq)\b\.?/g, "")
+    .split(/\s+/)
+    .map(p => p.replace(/[^a-z]/g, ""))
+    .filter(p => p.length >= 2);
+
   // ICT mode: show ONLY the hardcoded roster. No agents, no others.
   if (state.role !== "agent") {
-    const rosterLower = ASCEND_ICT_ROSTER.map(n => n.toLowerCase().trim());
+    const rosterParts = ASCEND_ICT_ROSTER.map(nameParts);
     const ictMatches = active.filter(u => {
-      const full = (u.name || "").toLowerCase().trim();
-      const composed = [(u.firstName || ""), (u.lastName || "")].join(" ").toLowerCase().trim();
-      return rosterLower.some(r => r === full || r === composed || full.includes(r));
+      const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
+      // Match if every part of any roster name appears in the FUB name.
+      return rosterParts.some(parts =>
+        parts.length >= 2 && parts.every(p => fubFull.includes(p))
+      );
     });
-    // Order matches by the roster order (so newest hire isn't at the top by FUB ID).
+    // Order matches by roster order so the list reads predictably.
     ictMatches.sort((a, b) => {
-      const ai = rosterLower.findIndex(r => (a.name || "").toLowerCase().includes(r));
-      const bi = rosterLower.findIndex(r => (b.name || "").toLowerCase().includes(r));
-      return ai - bi;
+      const idx = (u) => {
+        const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
+        return rosterParts.findIndex(parts => parts.every(p => fubFull.includes(p)));
+      };
+      return idx(a) - idx(b);
     });
     let html = `<option value="">— select —</option>`;
     if (ictMatches.length) {
       html += `<optgroup label="Inside Conversion Team">` + ictMatches.map(renderOpt).join("") + `</optgroup>`;
     } else {
-      html += `<option value="" disabled>No ICTs matched. Check ASCEND_ICT_ROSTER list.</option>`;
+      html += `<option value="" disabled>No ICTs matched. Check ASCEND_ICT_ROSTER list and FUB user names.</option>`;
+    }
+    // Diagnostic: log who matched and who didn't so you can see why.
+    console.log("[ICT roster] matched:", ictMatches.map(u => u.name));
+    const missingRoster = ASCEND_ICT_ROSTER.filter(name => {
+      const parts = nameParts(name);
+      return !active.some(u => {
+        const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
+        return parts.every(p => fubFull.includes(p));
+      });
+    });
+    if (missingRoster.length) {
+      console.warn("[ICT roster] not found in FUB users:", missingRoster, "— check spelling or FUB user status (Disabled/Inactive users are excluded)");
     }
     sel.innerHTML = html;
     return;

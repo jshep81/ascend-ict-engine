@@ -5397,49 +5397,61 @@ function populateRepNameDropdown() {
     return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}</option>`;
   };
 
-  // Strip generation suffixes and split into significant name parts (≥2 chars).
-  const nameParts = (s) => (s || "")
+  // Build a normalized lowercase string of the FUB name for substring match.
+  // Strips suffixes (Jr, Sr, II, III, etc.) and non-alpha characters.
+  const fubNameString = (u) =>
+    ((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""))
+      .toLowerCase()
+      .replace(/\b(jr|sr|ii|iii|iv|esq)\b\.?/g, "")
+      .replace(/[^a-z\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Roster name → array of significant lowercase parts.
+  const rosterParts = (s) => (s || "")
     .toLowerCase()
     .replace(/\b(jr|sr|ii|iii|iv|esq)\b\.?/g, "")
+    .replace(/[^a-z\s]/g, " ")
     .split(/\s+/)
-    .map(p => p.replace(/[^a-z]/g, ""))
     .filter(p => p.length >= 2);
 
   // ICT mode: show ONLY the hardcoded roster. No agents, no others.
   if (state.role !== "agent") {
-    const rosterParts = ASCEND_ICT_ROSTER.map(nameParts);
-    const ictMatches = active.filter(u => {
-      const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
-      // Match if every part of any roster name appears in the FUB name.
-      return rosterParts.some(parts =>
-        parts.length >= 2 && parts.every(p => fubFull.includes(p))
-      );
-    });
-    // Order matches by roster order so the list reads predictably.
-    ictMatches.sort((a, b) => {
-      const idx = (u) => {
-        const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
-        return rosterParts.findIndex(parts => parts.every(p => fubFull.includes(p)));
-      };
-      return idx(a) - idx(b);
-    });
+    // Match a FUB user to a roster slot. Substring match — "ben" matches "benjamin".
+    const matchToRoster = (u) => {
+      const fubStr = fubNameString(u);
+      return ASCEND_ICT_ROSTER.findIndex(rname => {
+        const parts = rosterParts(rname);
+        return parts.length >= 2 && parts.every(p => fubStr.includes(p));
+      });
+    };
+
+    const matchedPairs = active
+      .map(u => ({ user: u, rosterIdx: matchToRoster(u) }))
+      .filter(pair => pair.rosterIdx >= 0)
+      .sort((a, b) => a.rosterIdx - b.rosterIdx);
+
     let html = `<option value="">— select —</option>`;
-    if (ictMatches.length) {
-      html += `<optgroup label="Inside Conversion Team">` + ictMatches.map(renderOpt).join("") + `</optgroup>`;
+    if (matchedPairs.length) {
+      html += `<optgroup label="Inside Conversion Team">` + matchedPairs.map(({ user, rosterIdx }) => {
+        // Display the clean roster name, not the FUB legal name. Value is
+        // the FUB firstName so the rep-email auto-derivation still works.
+        const display = ASCEND_ICT_ROSTER[rosterIdx];
+        const value = user.firstName || display;
+        const safeVal = String(value).replace(/"/g, "&quot;");
+        const isSel = stored === value || stored === display || stored === user.name;
+        return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}</option>`;
+      }).join("") + `</optgroup>`;
     } else {
       html += `<option value="" disabled>No ICTs matched. Check ASCEND_ICT_ROSTER list and FUB user names.</option>`;
     }
-    // Diagnostic: log who matched and who didn't so you can see why.
-    console.log("[ICT roster] matched:", ictMatches.map(u => u.name));
-    const missingRoster = ASCEND_ICT_ROSTER.filter(name => {
-      const parts = nameParts(name);
-      return !active.some(u => {
-        const fubFull = nameParts((u.name || "") + " " + (u.firstName || "") + " " + (u.lastName || ""));
-        return parts.every(p => fubFull.includes(p));
-      });
-    });
-    if (missingRoster.length) {
-      console.warn("[ICT roster] not found in FUB users:", missingRoster, "— check spelling or FUB user status (Disabled/Inactive users are excluded)");
+    // Diagnostic — see who matched, who didn't, and why.
+    console.log("[ICT roster] matched:", matchedPairs.map(p => `${ASCEND_ICT_ROSTER[p.rosterIdx]} → ${p.user.name}`));
+    const matchedRosterIdxs = new Set(matchedPairs.map(p => p.rosterIdx));
+    const missing = ASCEND_ICT_ROSTER.filter((_, i) => !matchedRosterIdxs.has(i));
+    if (missing.length) {
+      console.warn("[ICT roster] not found in FUB users:", missing,
+        "— check spelling, or that the user isn't Disabled/Inactive in FUB. fubUsersCache size:", active.length);
     }
     sel.innerHTML = html;
     return;

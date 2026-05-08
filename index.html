@@ -1272,6 +1272,30 @@ button.next-btn-inline:hover {
 .dns-grid .field.full { grid-column: 1 / -1; }
 .dns-grid .field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.10em; color: var(--ink-mute); font-weight: 600; }
 .dns-grid .field input, .dns-grid .field select { font-size: 13px; padding: 7px 10px; background: var(--panel); }
+
+/* Compact DNS + Appointment in the right rail — fits the narrow column */
+.right-rail .dns-compact { padding: 14px 16px; margin-bottom: 12px; }
+.right-rail .dns-compact h2 { font-size: 11px; }
+.right-rail .dns-compact .dns-tagline { display: none; }
+.right-rail .dns-compact .dns-helper { display: none; }
+.right-rail .dns-compact .dns-grid { grid-template-columns: 1fr; gap: 8px; }
+.right-rail .dns-compact .dns-grid .field input,
+.right-rail .dns-compact .dns-grid .field select { font-size: 12.5px; padding: 6px 9px; }
+.right-rail .dns-compact .dns-grid .field label { font-size: 9.5px; }
+.right-rail .dns-compact .dns-actions-row { margin-top: 10px; }
+.right-rail .dns-compact .dns-fub-btn { font-size: 12px; padding: 7px 11px; }
+
+.right-rail .appt-compact { padding: 14px 16px; margin-bottom: 12px; }
+.right-rail .appt-compact h2 { font-size: 11px; }
+.right-rail .appt-compact .appt-form { grid-template-columns: 1fr; gap: 8px; }
+.right-rail .appt-compact .appt-form .field input,
+.right-rail .appt-compact .appt-form .field select,
+.right-rail .appt-compact .appt-form .field textarea { font-size: 12.5px; padding: 6px 9px; }
+.right-rail .appt-compact .appt-form .field label { font-size: 9.5px; }
+.right-rail .appt-compact .appt-form .field textarea { min-height: 50px; }
+.right-rail .appt-compact .appt-actions-row { flex-direction: column; gap: 6px; margin-top: 10px; }
+.right-rail .appt-compact .dns-fub-btn,
+.right-rail .appt-compact .ai-inline { font-size: 11.5px; padding: 6px 10px; width: 100%; justify-content: center; }
 .dns-helper { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 .dns-actions-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
 .appt-actions-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
@@ -1873,27 +1897,42 @@ button.next-btn-inline:hover {
 
       <section class="panel script-card" id="script-card"></section>
 
-      <section class="panel" id="appt-panel" style="display:none;">
-        <h2>FUB Appointment</h2>
-        <div class="appt-form" id="appt-form"></div>
-        <div class="appt-actions-row">
-          <button class="dns-fub-btn" onclick="bookAppointmentNow()" title="Open the FUB lead page and attempt to trigger the appointment dialog">✦ Book Appointment Now</button>
-          <button class="ai-inline ghost" onclick="createFubAppointment()" title="Create the appointment directly via FUB API — no manual confirmation in FUB">Auto-create in FUB</button>
-          <span class="fub-status" id="fub-appt-status"></span>
+      <section class="panel">
+        <h2>Call Insights</h2>
+        <div class="insight-grid">
+          <div class="field">
+            <label>Direct Quote — Verbatim from the Prospect</label>
+            <textarea id="ins-quote" placeholder='Capture a single line in their own words. Example: "We need to be in by August before the baby is born."'></textarea>
+          </div>
+          <div class="field">
+            <label>Decision Maker</label>
+            <select id="ins-decider">
+              <option value="">—</option>
+              <option>Solo decision-maker</option>
+              <option>Spouse co-decides — both should be on the call</option>
+              <option>Spouse co-decides — will report back</option>
+              <option>Family member also involved (parent / sibling)</option>
+              <option>Investor / corporate buyer</option>
+              <option>Unclear — flag for buyer specialist</option>
+            </select>
+          </div>
         </div>
       </section>
+    </main>
 
-      <section class="panel dns-panel">
+    <aside class="right-rail">
+      <section class="panel pre-call-brief" id="pre-call-brief" style="display:none;"></section>
+
+      <section class="panel dns-panel dns-compact">
         <div class="dns-header">
           <h2>Defined Next Step <span class="dns-badge">REQUIRED</span></h2>
           <span id="dns-quality" class="dns-quality"></span>
         </div>
-        <div class="dns-tagline">If it's not scheduled in FUB, it doesn't exist.</div>
         <div class="dns-grid">
           <div class="field">
             <label>Action</label>
             <select id="dns-action">
-              <option value="">— select action —</option>
+              <option value="">— select —</option>
               <option>Call</option>
               <option>Text</option>
               <option>Email</option>
@@ -1928,41 +1967,25 @@ button.next-btn-inline:hover {
           </div>
           <div class="field full">
             <label>Specifics</label>
-            <input id="dns-specifics" placeholder='e.g., "Call after work to confirm Saturday tour"'>
+            <input id="dns-specifics" placeholder="e.g., Call after work to confirm tour">
           </div>
         </div>
         <div class="dns-actions-row">
           <button class="dns-fub-btn" onclick="createFubTask()" title="Auto-create this task in FUB">✦ Create Task in FUB</button>
           <span class="fub-status" id="fub-task-status"></span>
         </div>
-        <div class="dns-helper">One click creates the task directly in FUB — needs the FUB Lead URL pasted at the top.</div>
       </section>
 
-      <section class="panel">
-        <h2>Call Insights</h2>
-        <div class="insight-grid">
-          <div class="field">
-            <label>Direct Quote — Verbatim from the Prospect</label>
-            <textarea id="ins-quote" placeholder='Capture a single line in their own words. Example: "We need to be in by August before the baby is born."'></textarea>
-          </div>
-          <div class="field">
-            <label>Decision Maker</label>
-            <select id="ins-decider">
-              <option value="">—</option>
-              <option>Solo decision-maker</option>
-              <option>Spouse co-decides — both should be on the call</option>
-              <option>Spouse co-decides — will report back</option>
-              <option>Family member also involved (parent / sibling)</option>
-              <option>Investor / corporate buyer</option>
-              <option>Unclear — flag for buyer specialist</option>
-            </select>
-          </div>
+      <section class="panel appt-compact" id="appt-panel" style="display:none;">
+        <h2>FUB Appointment</h2>
+        <div class="appt-form" id="appt-form"></div>
+        <div class="appt-actions-row">
+          <button class="dns-fub-btn" onclick="bookAppointmentNow()" title="Open the FUB lead page and attempt to trigger the appointment dialog">✦ Book Appointment Now</button>
+          <button class="ai-inline ghost" onclick="createFubAppointment()" title="Create the appointment directly via FUB API — no manual confirmation in FUB">Auto-create in FUB</button>
+          <span class="fub-status" id="fub-appt-status"></span>
         </div>
       </section>
-    </main>
 
-    <aside class="right-rail">
-      <section class="panel pre-call-brief" id="pre-call-brief" style="display:none;"></section>
       <section class="panel">
         <div class="tab-row">
           <button id="tab-summary" class="active" onclick="setTab('summary')">Summary</button>
@@ -5488,11 +5511,18 @@ function buildLeadBriefMessage(ctx) {
     lines.push("");
   }
   if (ctx.events && ctx.events.length) {
-    lines.push(`RECENT ACTIVITY EVENTS (${ctx.events.length}):`);
+    lines.push(`RECENT ACTIVITY EVENTS (${ctx.events.length}, newest first):`);
     ctx.events.forEach(e => {
       let line = `- [${e.created}] ${e.type || ""}`;
-      if (e.property && e.property.street) {
-        line += ` — ${e.property.street}${e.property.city ? ", " + e.property.city : ""}${e.property.price ? " · $" + e.property.price : ""}`;
+      if (e.source) line += ` (${e.source})`;
+      if (e.property && (e.property.street || e.property.address)) {
+        const street = e.property.street || e.property.address;
+        line += ` — ${street}`;
+        if (e.property.city) line += `, ${e.property.city}`;
+        if (e.property.price) line += ` · $${e.property.price}`;
+        if (e.property.beds) line += ` · ${e.property.beds}bd`;
+        if (e.property.baths) line += `/${e.property.baths}ba`;
+        if (e.property.sqft) line += ` · ${e.property.sqft}sqft`;
       } else if (e.message) {
         line += ` — ${e.message.replace(/\s+/g, " ").slice(0, 200)}`;
       }

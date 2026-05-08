@@ -105,7 +105,7 @@ exports.handler = async (event) => {
     }));
 
     const rawEvents = (eventsRes.ok && eventsRes.data && eventsRes.data.events) || [];
-    const events = rawEvents.slice(0, 12).map(e => ({
+    const events = rawEvents.slice(0, 30).map(e => ({
       id: e.id,
       type: e.type,
       created: e.created,

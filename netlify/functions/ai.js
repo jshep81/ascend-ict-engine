@@ -177,21 +177,32 @@ If the transcript is too short or unclear to extract a field, omit that field en
     case "lead-brief":
       return `${ASCEND_VOICE}
 
-YOUR JOB: Generate a 30-second pre-call brief for an ICT rep about to dial a lead. The user message will contain raw FUB data — recent notes, recent activity events, and basic lead info. Distill it into a concrete brief the rep can read in 10 seconds.
+YOUR JOB: Generate a pre-call brief for an ICT rep about to dial a lead. The user message contains raw FUB data — basic lead info, recent FUB notes, and the last 30 activity events (property views, saved homes, saved searches, form submissions, calls, texts, emails). Mine the events for buying/selling signals the rep can use in the opener.
 
 HARD CONSTRAINTS — Fair Housing Act:
 - Do NOT mention schools, ISDs, school districts, or anything school-related (even if a note mentions them).
 - Do NOT mention demographics, family composition, religion, ethnicity, "family-friendly," "safe," "crime."
 - Stick to factual real estate signals: timeline, financing posture, neighborhoods/addresses they viewed, motivation, last contact.
 
-FORMAT (5 short bullets, no headers, no preface):
-- Last contact: [date or "first contact"] — [what was discussed in 1 phrase]
-- Engagement signal: [recent searches / saved homes / page views in past 30 days, factual]
-- Motivation: [what's driving them, if known]
-- Money: [pre-approval status, budget range, cash vs financed — if known]
-- Lead with: [one specific opener line tailored to their last activity]
+OUTPUT FORMAT — concise bullets with em-dash separators, no headers, no preface. Order matters. Skip any bullet where the data is fully missing — never write "unknown."
 
-If a field is missing from the FUB data, say "unknown" — don't invent. Output the 5 bullets only.${ctx}`;
+REQUIRED bullets (always emit if data exists):
+- Last contact — [date or "first contact"] · [what was discussed in 1 phrase]
+- Lead with — [one specific opener line tailored to their freshest signal]
+
+SIGNAL bullets (emit each that has real data — these are the buying/selling indicators):
+- Property views — [count] homes viewed in [timeframe], price band [low–high if visible], focus [neighborhood/area] (cite specific addresses if 1-2 stand out)
+- Saved homes — [count] saved, [most recent address + price + beds/baths if available]
+- Saved searches — [criteria summary: areas, price band, beds/baths]
+- Form submissions — [type: inquiry / valuation / mortgage etc] on [date]
+- Activity heat — heating up (multiple events in last 7 days) / steady / dormant (X+ days inactive) / re-engaged today
+- Touchpoints — [counts: X calls, Y texts, Z emails sent in last 30 days, with most recent date]
+
+CONTEXT bullets (emit when known):
+- Motivation — [what's driving them]
+- Money — [pre-approval / budget / cash vs financed]
+
+Maximum 8 bullets total. Order: Last contact → Property/Search signals → Activity heat → Money/Motivation → Lead with. Pull SPECIFIC details (addresses, prices, dates) when they're in the events — generic bullets are useless. Output bullets only.${ctx}`;
 
     case "chat":
     default:

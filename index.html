@@ -1297,20 +1297,25 @@ button.next-btn-inline:hover {
 .right-rail .appt-compact .dns-fub-btn,
 .right-rail .appt-compact .ai-inline { font-size: 11.5px; padding: 6px 10px; width: 100%; justify-content: center; }
 
-/* Callingly auto-pop panel — top of right rail (compact, no iframe) */
+/* Auto-pop panel — top of right rail. Two dialer integrations side-by-side. */
 .webphone-panel { padding: 0; margin-bottom: 12px; overflow: hidden; }
 .webphone-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-soft, #fafafa); }
-.webphone-header h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; display: flex; align-items: center; gap: 6px; }
-.webphone-sub { font-size: 9.5px; color: var(--ink-soft); font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
-.webphone-controls { display: flex; gap: 8px; align-items: center; }
+.webphone-header h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; }
+.webphone-body { padding: 10px 14px 14px; }
+.dialer-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; }
+.dialer-row + .dialer-row { border-top: 1px solid var(--line); }
+.dialer-logo { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; }
+.dialer-logo svg { display: block; }
+.dialer-name { font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+.dialer-tag { font-size: 10px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin-left: auto; }
 .webphone-status { font-size: 12px; line-height: 1; color: #c0c0c0; transition: color 200ms; }
 .webphone-status.live { color: #2ecc71; }
 .webphone-status.ringing { color: #f39c12; animation: webphone-pulse 1s infinite; }
 .webphone-status.error { color: #e74c3c; }
 @keyframes webphone-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-.webphone-body { padding: 12px 14px 14px; }
-.webphone-tagline { font-size: 11.5px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.4; }
-.webphone-popout { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 6px 0; border-bottom: 1px solid transparent; transition: border-color 200ms; }
+.webphone-tagline { font-size: 11px; color: var(--ink-soft); margin: 10px 0 8px; line-height: 1.4; padding-top: 8px; border-top: 1px solid var(--line); }
+.dialer-actions { display: flex; gap: 14px; }
+.webphone-popout { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; transition: border-color 200ms; }
 .webphone-popout:hover { border-bottom-color: var(--accent); }
 .dns-helper { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 .dns-actions-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
@@ -1939,14 +1944,30 @@ button.next-btn-inline:hover {
     <aside class="right-rail">
       <section class="panel webphone-panel" id="webphone-panel">
         <div class="webphone-header">
-          <h2>Auto-Pop <span class="webphone-sub">via Callingly</span></h2>
-          <div class="webphone-controls">
-            <span class="webphone-status" id="webphone-status" title="Webhook auto-pop status">●</span>
-          </div>
+          <h2>Auto-Pop</h2>
         </div>
         <div class="webphone-body">
-          <p class="webphone-tagline" id="webphone-tagline">Waiting for rep selection…</p>
-          <a class="webphone-popout" href="https://phone.callingly.com/" target="_blank" rel="noopener">Open Callingly Phone ↗</a>
+          <div class="dialer-row" title="Inbound calls via Callingly webhook">
+            <span class="dialer-logo dialer-callingly" aria-label="Callingly">
+              <svg viewBox="0 0 24 24" width="14" height="14"><path fill="#0099d8" d="M12 2C6.5 2 2 6 2 11c0 2.4 1.1 4.6 2.9 6.2L4 22l5.1-1.5c.9.2 1.9.3 2.9.3 5.5 0 10-4 10-9.8S17.5 2 12 2zm-1.4 12.4c-.4.4-1.1.6-1.7.4-.7-.2-1.4-.7-2-1.3-.6-.6-1.1-1.3-1.3-2-.2-.6 0-1.3.4-1.7l.6-.6c.2-.2.5-.2.7 0l1 1c.2.2.2.5 0 .7l-.4.4c-.1.1-.1.3 0 .4.2.4.6.9 1.1 1.3.4.4.9.8 1.3 1.1.1.1.3.1.4 0l.4-.4c.2-.2.5-.2.7 0l1 1c.2.2.2.5 0 .7l-.6.6z"/></svg>
+            </span>
+            <span class="dialer-name">Callingly</span>
+            <span class="dialer-tag">inbound</span>
+            <span class="webphone-status" id="webphone-status" title="Callingly auto-pop status">●</span>
+          </div>
+          <div class="dialer-row" title="Outbound calls via Mojo screen pop">
+            <span class="dialer-logo dialer-mojo" aria-label="Mojo">
+              <svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#e8302b"/><path fill="#fff" d="M5 17V7h2.5l2.5 5.5L12.5 7H15v10h-2v-6.2l-2 4.4h-1l-2-4.4V17H5zm12.5 0V7h2v10h-2z"/></svg>
+            </span>
+            <span class="dialer-name">Mojo</span>
+            <span class="dialer-tag">outbound</span>
+            <span class="webphone-status" id="mojo-status" title="Mojo screen-pop status — fires when Mojo opens engine with lead params">●</span>
+          </div>
+          <p class="webphone-tagline" id="webphone-tagline">Pick your name above to enable auto-pop.</p>
+          <div class="dialer-actions">
+            <a class="webphone-popout" href="https://phone.callingly.com/" target="_blank" rel="noopener">Callingly ↗</a>
+            <a class="webphone-popout" href="https://www.mojosells.com/" target="_blank" rel="noopener">Mojo ↗</a>
+          </div>
         </div>
       </section>
 
@@ -5383,8 +5404,10 @@ function populateRepNameDropdown() {
     "Adam Williams",
     "Jean Guinang",
     "Ben Laurena",
-    "Rao Hamza",
-    "Mary Lawrence"
+    "Rao Hamza"
+    // Add Mary Lawrence + new hires here as they come on:
+    // "Mary Lawrence",
+    // "First Last",
   ];
 
   const active = (fubUsersCache || []).filter(u => u.status !== "Disabled" && u.status !== "Inactive");
@@ -7060,6 +7083,46 @@ function updateWebphoneTagline(text) {
 }
 
 // ----------------------------------------------------------------------------
+// Mojo screen-pop detection
+// ----------------------------------------------------------------------------
+// Mojo's "Screen Pop URL" feature opens a URL in the rep's browser the moment
+// a call connects. We have Mojo open the engine with lead params:
+//   https://conversionengine.netlify.app/?source=mojo&phone=X&firstName=Y&lastName=Z
+// or the cleanest form if Mojo stores a FUB person ID:
+//   https://conversionengine.netlify.app/?source=mojo&personId=X
+//
+// The engine's existing autoLoadFromEmbedParams handles the FUB lookup. This
+// function just lights up the Mojo dot so the rep can confirm Screen Pop fired.
+
+function setMojoStatus(state, msg) {
+  const dot = document.getElementById("mojo-status");
+  if (!dot) return;
+  dot.classList.remove("live", "ringing", "error");
+  if (state === "live") { dot.classList.add("live"); dot.title = "Mojo screen-pop ready"; }
+  else if (state === "ringing") { dot.classList.add("ringing"); dot.title = msg || "Mojo screen-pop fired — lead loaded"; }
+  else if (state === "error") { dot.classList.add("error"); dot.title = msg || "Mojo screen-pop error"; }
+  else { dot.title = "Mojo idle. Configure Screen Pop URL in Mojo settings."; }
+}
+
+// On page load, check if we arrived via Mojo screen-pop. If yes, briefly
+// highlight Mojo and update the tagline so the rep knows where the lead came from.
+function detectMojoScreenPop() {
+  try {
+    const u = new URL(window.location.href);
+    const source = (u.searchParams.get("source") || "").toLowerCase();
+    const hasLeadParams = u.searchParams.get("personId") || u.searchParams.get("phone");
+    if (source === "mojo" && hasLeadParams) {
+      setMojoStatus("ringing", "Mojo screen-pop just fired — loading lead");
+      updateWebphoneTagline("Mojo screen-pop fired. Lead loading.");
+      // Settle to idle/live state after the lead loads
+      setTimeout(() => setMojoStatus("live"), 4000);
+    } else {
+      setMojoStatus("live"); // Always live — Mojo is config, not poll-based
+    }
+  } catch (e) { setMojoStatus("idle"); }
+}
+
+// ----------------------------------------------------------------------------
 // Active-call poller — backed by Callingly webhook → Netlify Blob
 // ----------------------------------------------------------------------------
 const ACTIVE_CALL_POLL_MS = 5000;
@@ -7149,6 +7212,8 @@ try { loadFromFubSDK(); } catch (e) { console.warn("loadFromFubSDK failed:", e);
 // Start the Callingly auto-pop poller. Safe to run even if no rep set yet —
 // it'll just no-op until the rep name is chosen.
 try { startActiveCallPolling(); } catch (e) { console.warn("startActiveCallPolling failed:", e); }
+// Detect if we arrived via Mojo screen-pop, light up that dot accordingly.
+try { detectMojoScreenPop(); } catch (e) { console.warn("detectMojoScreenPop failed:", e); }
 </script>
 </body>
 </html>

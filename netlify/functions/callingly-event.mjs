@@ -1,9 +1,9 @@
-// Ascend ICT — Callingly webhook receiver
+// Ascend ICT — Callingly webhook receiver (Netlify Functions v2)
 //
 // Callingly fires this when an inbound call rings/connects/completes.
 // We extract the agent email + lead phone, look up the FUB person ID,
 // and write {agentEmail, fubPersonId, ringingAt, callId, status} into
-// Netlify Blobs so the engine's active-call.js endpoint can read it.
+// Netlify Blobs so the engine's active-call endpoint can read it.
 //
 // Required env vars:
 //   FUB_API_KEY                — to look up the lead by phone
@@ -11,26 +11,26 @@
 //
 // Set up in Callingly:
 //   Webhook URL: https://conversionengine.netlify.app/api/callingly-event?secret=YOUR_SECRET
-//   Events: call.received, call.connected, call.completed (or whatever Callingly exposes)
+//   Events: Call Accepted, Call Completed (we filter event types in code)
 
-const { getStore } = require("@netlify/blobs");
+import { getStore } from "@netlify/blobs";
 
 const FUB_API_BASE = "https://api.followupboss.com/v1";
 
-function corsHeaders() {
-  return {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Callingly-Signature"
-  };
-}
+const CORS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Callingly-Signature, X-Callingly-Secret"
+};
 
-function fubAuth() {
-  return "Basic " + Buffer.from(`${process.env.FUB_API_KEY}:`).toString("base64");
-}
+const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), { status, headers: CORS });
 
-// Look up FUB person by phone. Returns FUB person ID or null.
+const fubAuth = () =>
+  "Basic " + Buffer.from(`${process.env.FUB_API_KEY}:`).toString("base64");
+
+// Look up FUB person by phone. Returns FUB person summary or null.
 async function lookupFubPersonByPhone(phone) {
   if (!phone) return null;
   const clean = String(phone).replace(/[^\d]/g, "");
@@ -62,7 +62,8 @@ async function lookupFubPersonByPhone(phone) {
   }
 }
 
-// Pull all the possible field locations Callingly might use. They differ by plan / event type.
+// Pull all the possible field locations Callingly might use. Field shapes
+// vary by Callingly plan and event type so we try every common path.
 function extractCallData(body) {
   const root = body || {};
   const call = root.call || root.payload || root.data || root;
@@ -81,47 +82,53 @@ function extractCallData(body) {
   };
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: corsHeaders(), body: "" };
-  if (event.httpMethod !== "POST") return { statusCode: 405, headers: corsHeaders(), body: JSON.stringify({ error: "Method not allowed" }) };
+export default async (req) => {
+  if (req.method === "OPTIONS") return new Response("", { status: 204, headers: CORS });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   // Auth — secret in query param OR header
   const expectedSecret = process.env.CALLINGLY_WEBHOOK_SECRET;
-  if (!expectedSecret) return { statusCode: 500, headers: corsHeaders(), body: JSON.stringify({ error: "Server not configured: CALLINGLY_WEBHOOK_SECRET missing" }) };
-  const qs = event.queryStringParameters || {};
-  const headerSecret = (event.headers || {})["x-callingly-secret"] || (event.headers || {})["X-Callingly-Secret"];
-  const providedSecret = qs.secret || headerSecret;
-  if (providedSecret !== expectedSecret) return { statusCode: 401, headers: corsHeaders(), body: JSON.stringify({ error: "Unauthorized" }) };
-  if (!process.env.FUB_API_KEY) return { statusCode: 500, headers: corsHeaders(), body: JSON.stringify({ error: "Server not configured: FUB_API_KEY missing" }) };
+  if (!expectedSecret) return json({ error: "Server not configured: CALLINGLY_WEBHOOK_SECRET missing" }, 500);
+
+  const url = new URL(req.url);
+  const headerSecret = req.headers.get("x-callingly-secret");
+  const providedSecret = url.searchParams.get("secret") || headerSecret;
+  if (providedSecret !== expectedSecret) return json({ error: "Unauthorized" }, 401);
+  if (!process.env.FUB_API_KEY) return json({ error: "Server not configured: FUB_API_KEY missing" }, 500);
 
   let body;
-  try { body = JSON.parse(event.body || "{}"); } catch (e) {
-    return { statusCode: 400, headers: corsHeaders(), body: JSON.stringify({ error: "Invalid JSON" }) };
+  try {
+    body = await req.json();
+  } catch (e) {
+    return json({ error: "Invalid JSON" }, 400);
   }
 
   const data = extractCallData(body);
-  console.log("[Callingly Event]", data);
+  console.log("[Callingly Event]", JSON.stringify(data));
 
   if (!data.agentEmail) {
-    return { statusCode: 400, headers: corsHeaders(), body: JSON.stringify({ error: "Could not extract agent email from payload", received: body }) };
+    return json({ error: "Could not extract agent email from payload", received: body }, 400);
   }
 
-  // Open the active-calls blob store
   const store = getStore("active-calls");
   const key = data.agentEmail;
 
-  // Status filtering — only set "active" for ringing/connected. Clear on completed.
+  // Status / event-type filtering. Clear state on completed events,
+  // write state on ringing / accepted / connected events.
   const status = (data.status || "").toLowerCase();
-  const isCallEnded = /completed|ended|hangup|hung_up|finished|disconnected/.test(status) || /completed|ended|finished/.test(data.eventType);
-  const isCallStart = /received|ringing|connected|in_progress|active/.test(status) || /received|ringing|connected|started/.test(data.eventType);
+  const evt = (data.eventType || "").toLowerCase();
+  const isCallEnded =
+    /completed|ended|hangup|hung_up|finished|disconnected/.test(status) ||
+    /completed|ended|finished|call_completed|call\.completed/.test(evt);
+  // Anything that isn't a clear "end" event we treat as a "start" — most
+  // permissive shape so Call Accepted, Call Connected, Call Received all hit.
 
   if (isCallEnded) {
-    // Clear state
     try { await store.delete(key); } catch (e) {}
-    return { statusCode: 200, headers: corsHeaders(), body: JSON.stringify({ status: "cleared", agent: key }) };
+    return json({ status: "cleared", agent: key });
   }
 
-  // Otherwise look up the FUB person and write state
+  // Look up the FUB person and write state
   const fubPerson = await lookupFubPersonByPhone(data.leadPhone);
 
   const stateRecord = {
@@ -140,17 +147,15 @@ exports.handler = async (event) => {
   };
 
   try {
-    await store.setJSON(key, stateRecord, {
-      metadata: { ttl: Date.now() + (5 * 60 * 1000) } // 5 min stale window
-    });
+    await store.setJSON(key, stateRecord);
   } catch (e) {
     console.error("Blob write failed:", e);
-    return { statusCode: 500, headers: corsHeaders(), body: JSON.stringify({ error: "Failed to write state", detail: String(e).slice(0, 200) }) };
+    return json({ error: "Failed to write state", detail: String(e).slice(0, 300) }, 500);
   }
 
-  return {
-    statusCode: 200,
-    headers: corsHeaders(),
-    body: JSON.stringify({ status: "stored", agent: key, fubPersonId: stateRecord.fubPersonId, receivedAt: stateRecord.receivedAt })
-  };
+  return json({ status: "stored", agent: key, fubPersonId: stateRecord.fubPersonId, receivedAt: stateRecord.receivedAt });
+};
+
+export const config = {
+  path: "/api/callingly-event"
 };

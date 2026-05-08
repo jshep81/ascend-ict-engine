@@ -59,15 +59,8 @@
   to = "/.netlify/functions/transcribe"
   status = 200
 
-[[redirects]]
-  from = "/api/callingly-event"
-  to = "/.netlify/functions/callingly-event"
-  status = 200
-
-[[redirects]]
-  from = "/api/active-call"
-  to = "/.netlify/functions/active-call"
-  status = 200
+# /api/callingly-event and /api/active-call are v2 functions —
+# their routes are configured inside the function via `export const config`.
 
 # Security + iframe-embedding headers
 # Allows the engine to be embedded as a FUB iframe app.

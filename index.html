@@ -1297,27 +1297,21 @@ button.next-btn-inline:hover {
 .right-rail .appt-compact .dns-fub-btn,
 .right-rail .appt-compact .ai-inline { font-size: 11.5px; padding: 6px 10px; width: 100%; justify-content: center; }
 
-/* Callingly webphone panel — top of right rail */
+/* Callingly auto-pop panel — top of right rail (compact, no iframe) */
 .webphone-panel { padding: 0; margin-bottom: 12px; overflow: hidden; }
 .webphone-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--bg-soft, #fafafa); }
-.webphone-header h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; }
+.webphone-header h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; display: flex; align-items: center; gap: 6px; }
+.webphone-sub { font-size: 9.5px; color: var(--ink-soft); font-weight: 500; letter-spacing: 0.02em; text-transform: none; }
 .webphone-controls { display: flex; gap: 8px; align-items: center; }
 .webphone-status { font-size: 12px; line-height: 1; color: #c0c0c0; transition: color 200ms; }
 .webphone-status.live { color: #2ecc71; }
 .webphone-status.ringing { color: #f39c12; animation: webphone-pulse 1s infinite; }
 .webphone-status.error { color: #e74c3c; }
 @keyframes webphone-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-.webphone-toggle { background: transparent; border: 1px solid var(--line); border-radius: 4px; width: 22px; height: 22px; font-size: 13px; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 0; }
-.webphone-toggle:hover { background: var(--line); }
-.webphone-frame-wrap { position: relative; height: 520px; transition: height 200ms ease; }
-.webphone-frame-wrap iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
-.webphone-fallback { padding: 24px; text-align: center; font-size: 12.5px; color: var(--ink-soft); }
-.webphone-fallback a { color: var(--accent); font-weight: 600; }
-.webphone-panel.collapsed .webphone-frame-wrap { height: 0; }
-.webphone-panel.collapsed .webphone-toggle { transform: rotate(0); }
-.webphone-panel.collapsed .webphone-toggle::before { content: "+"; }
-.webphone-panel.collapsed .webphone-toggle { font-size: 0; }
-.webphone-panel.collapsed .webphone-toggle::before { font-size: 13px; }
+.webphone-body { padding: 12px 14px 14px; }
+.webphone-tagline { font-size: 11.5px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.4; }
+.webphone-popout { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 6px 0; border-bottom: 1px solid transparent; transition: border-color 200ms; }
+.webphone-popout:hover { border-bottom-color: var(--accent); }
 .dns-helper { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 .dns-actions-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
 .appt-actions-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
@@ -1945,24 +1939,14 @@ button.next-btn-inline:hover {
     <aside class="right-rail">
       <section class="panel webphone-panel" id="webphone-panel">
         <div class="webphone-header">
-          <h2>Callingly Phone</h2>
+          <h2>Auto-Pop <span class="webphone-sub">via Callingly</span></h2>
           <div class="webphone-controls">
             <span class="webphone-status" id="webphone-status" title="Webhook auto-pop status">●</span>
-            <button class="webphone-toggle" id="webphone-toggle" onclick="toggleWebphone()" title="Collapse / expand">−</button>
           </div>
         </div>
-        <div class="webphone-frame-wrap" id="webphone-frame-wrap">
-          <iframe
-            id="webphone-frame"
-            src="https://phone.callingly.com/"
-            allow="microphone; autoplay; clipboard-write"
-            referrerpolicy="strict-origin-when-cross-origin"
-            title="Callingly Webphone"
-          ></iframe>
-          <div class="webphone-fallback" id="webphone-fallback" style="display:none;">
-            <p>Callingly blocked the embed.</p>
-            <a href="https://phone.callingly.com/" target="_blank" rel="noopener">Open phone in new tab</a>
-          </div>
+        <div class="webphone-body">
+          <p class="webphone-tagline" id="webphone-tagline">Waiting for rep selection…</p>
+          <a class="webphone-popout" href="https://phone.callingly.com/" target="_blank" rel="noopener">Open Callingly Phone ↗</a>
         </div>
       </section>
 
@@ -6964,41 +6948,11 @@ window.addEventListener("message", (event) => {
 //      itself is sandboxed (cross-origin), so we can't read state from it
 //      directly — that's exactly why the webhook path matters.
 
-function toggleWebphone() {
-  const panel = document.getElementById("webphone-panel");
-  const btn = document.getElementById("webphone-toggle");
-  if (!panel) return;
-  panel.classList.toggle("collapsed");
-  if (btn) btn.textContent = panel.classList.contains("collapsed") ? "+" : "−";
-  try { localStorage.setItem("ASCEND_WEBPHONE_COLLAPSED", panel.classList.contains("collapsed") ? "1" : "0"); } catch (e) {}
-}
-
-function restoreWebphoneState() {
-  try {
-    if (localStorage.getItem("ASCEND_WEBPHONE_COLLAPSED") === "1") {
-      const panel = document.getElementById("webphone-panel");
-      const btn = document.getElementById("webphone-toggle");
-      if (panel) panel.classList.add("collapsed");
-      if (btn) btn.textContent = "+";
-    }
-  } catch (e) {}
-}
-
-// Detect if Callingly blocks the embed — if the iframe never fires `load`
-// within 6 seconds, surface the fallback link.
-function watchWebphoneEmbed() {
-  const frame = document.getElementById("webphone-frame");
-  const fallback = document.getElementById("webphone-fallback");
-  if (!frame) return;
-  let loaded = false;
-  frame.addEventListener("load", () => { loaded = true; });
-  setTimeout(() => {
-    if (!loaded && fallback) {
-      console.warn("[Webphone] iframe did not fire load — likely X-Frame-Options block");
-      frame.style.display = "none";
-      fallback.style.display = "block";
-    }
-  }, 6000);
+// Update the status tagline below the dot — keeps the rep informed about
+// what the auto-pop pipeline is doing without needing to read the dot color.
+function updateWebphoneTagline(text) {
+  const el = document.getElementById("webphone-tagline");
+  if (el) el.textContent = text;
 }
 
 // ----------------------------------------------------------------------------
@@ -7029,10 +6983,10 @@ function setWebphoneStatus(state) {
   const dot = document.getElementById("webphone-status");
   if (!dot) return;
   dot.classList.remove("live", "ringing", "error");
-  if (state === "live") { dot.classList.add("live"); dot.title = "Webhook connected — waiting for calls"; }
-  else if (state === "ringing") { dot.classList.add("ringing"); dot.title = "Active call detected — auto-loading lead"; }
-  else if (state === "error") { dot.classList.add("error"); dot.title = "Webhook polling error"; }
-  else { dot.title = "Webhook idle"; }
+  if (state === "live") { dot.classList.add("live"); dot.title = "Webhook connected — waiting for calls"; updateWebphoneTagline("Auto-pop active. Waiting for next call."); }
+  else if (state === "ringing") { dot.classList.add("ringing"); dot.title = "Active call detected — auto-loading lead"; updateWebphoneTagline("Call accepted — loading lead now."); }
+  else if (state === "error") { dot.classList.add("error"); dot.title = "Webhook polling error"; updateWebphoneTagline("Auto-pop error. Check console."); }
+  else { dot.title = "Webhook idle"; updateWebphoneTagline("Pick your name above to enable auto-pop."); }
 }
 
 async function pollActiveCall() {
@@ -7082,8 +7036,6 @@ renderRoleSelector();
 renderTrackSelector();
 bindLeadInfo(); bindNotes(); bindInsight(); bindDNS(); renderAll();
 applyEmbedChrome();
-restoreWebphoneState();
-watchWebphoneEmbed();
 // Pull FUB team users in the background so the rep-name dropdown
 // and reassignment dropdown populate without a manual refresh click.
 try { loadFubUsers(); } catch (e) { console.warn("loadFubUsers failed on init:", e); }

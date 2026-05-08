@@ -1317,6 +1317,13 @@ button.next-btn-inline:hover {
 .dialer-actions { display: flex; gap: 14px; }
 .webphone-popout { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; transition: border-color 200ms; }
 .webphone-popout:hover { border-bottom-color: var(--accent); }
+/* Quick phone lookup — for Mojo outbound */
+.phone-lookup { display: flex; gap: 6px; margin-top: 8px; }
+.phone-lookup input { flex: 1; min-width: 0; font-size: 11.5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); }
+.phone-lookup input:focus { outline: none; border-color: var(--accent); }
+.phone-lookup-btn { font-size: 11px; font-weight: 600; padding: 5px 10px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.phone-lookup-btn:hover { opacity: 0.9; }
+.phone-lookup-btn:disabled { opacity: 0.5; cursor: wait; }
 .dns-helper { font-size: 11px; color: var(--ink-soft); font-style: italic; }
 .dns-actions-row { display: flex; gap: 10px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
 .appt-actions-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
@@ -1955,13 +1962,17 @@ button.next-btn-inline:hover {
             <span class="dialer-tag">inbound</span>
             <span class="webphone-status" id="webphone-status" title="Callingly auto-pop status">●</span>
           </div>
-          <div class="dialer-row" title="Outbound calls via Mojo screen pop">
+          <div class="dialer-row" title="Outbound — paste the lead phone from Mojo to load FUB record">
             <span class="dialer-logo dialer-mojo" aria-label="Mojo">
               <svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#e8302b"/><path fill="#fff" d="M5 17V7h2.5l2.5 5.5L12.5 7H15v10h-2v-6.2l-2 4.4h-1l-2-4.4V17H5zm12.5 0V7h2v10h-2z"/></svg>
             </span>
             <span class="dialer-name">Mojo</span>
             <span class="dialer-tag">outbound</span>
-            <span class="webphone-status" id="mojo-status" title="Mojo screen-pop status — fires when Mojo opens engine with lead params">●</span>
+            <span class="webphone-status" id="mojo-status" title="Mojo: paste lead phone to load FUB record">●</span>
+          </div>
+          <div class="phone-lookup">
+            <input type="tel" id="phone-lookup-input" placeholder="Paste lead phone from Mojo" autocomplete="off" inputmode="tel" />
+            <button class="phone-lookup-btn" id="phone-lookup-btn" onclick="quickPhoneLookup()" title="Search FUB by phone and load the lead">Load</button>
           </div>
           <p class="webphone-tagline" id="webphone-tagline">Pick your name above to enable auto-pop.</p>
           <div class="dialer-actions">
@@ -7104,6 +7115,76 @@ function setMojoStatus(state, msg) {
   else { dot.title = "Mojo idle. Configure Screen Pop URL in Mojo settings."; }
 }
 
+// Quick phone lookup — rep pastes the lead phone from Mojo, we look up FUB
+// person by phone, then trigger the existing autoLoadFromEmbedParams chain.
+// Bound to: Enter key in the input, click on the Load button.
+async function quickPhoneLookup() {
+  const input = document.getElementById("phone-lookup-input");
+  const btn = document.getElementById("phone-lookup-btn");
+  if (!input) return;
+  const phone = (input.value || "").trim();
+  if (!phone) { input.focus(); return; }
+  const cleanDigits = phone.replace(/[^\d]/g, "");
+  if (cleanDigits.length < 10) {
+    if (typeof toast === "function") toast("Phone needs at least 10 digits");
+    return;
+  }
+  setMojoStatus("ringing", "Looking up FUB record…");
+  if (btn) { btn.disabled = true; btn.textContent = "…"; }
+  try {
+    const res = await fetch("/api/fub-find-by-phone?phone=" + encodeURIComponent(cleanDigits), {
+      headers: { "X-Ascend-Secret": ASCEND_AI_SECRET }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.warn("[Quick lookup] failed:", data);
+      setMojoStatus("error", data.detail || data.error || "Lookup failed");
+      if (typeof toast === "function") toast(data.error || "FUB lookup failed");
+      return;
+    }
+    if (!data.found) {
+      setMojoStatus("error", `No FUB record matched ${cleanDigits.slice(-10)}`);
+      if (typeof toast === "function") toast("No FUB lead found for that phone");
+      return;
+    }
+    const p = data.person;
+    console.log("[Quick lookup] FUB person:", p);
+    // Inject personId + name into URL so autoLoadFromEmbedParams picks it up
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("source", "mojo");
+      u.searchParams.set("personId", p.id);
+      if (p.firstName) u.searchParams.set("firstName", p.firstName);
+      if (p.lastName) u.searchParams.set("lastName", p.lastName);
+      if (p.phone) u.searchParams.set("phone", p.phone);
+      window.history.replaceState({}, "", u.toString());
+    } catch (e) {}
+    setMojoStatus("ringing", `Loaded ${p.name || p.firstName}`);
+    if (typeof toast === "function") toast(`Loaded ${p.name || p.firstName}`);
+    autoLoadFromEmbedParams();
+    input.value = "";
+    setTimeout(() => setMojoStatus("live"), 3000);
+  } catch (err) {
+    console.error("[Quick lookup] error:", err);
+    setMojoStatus("error", String(err).slice(0, 100));
+    if (typeof toast === "function") toast("Lookup failed — see console");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Load"; }
+  }
+}
+
+// Bind Enter key on the phone input to trigger lookup. Done at init time.
+function bindQuickPhoneLookup() {
+  const input = document.getElementById("phone-lookup-input");
+  if (!input) return;
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      quickPhoneLookup();
+    }
+  });
+}
+
 // On page load, check if we arrived via Mojo screen-pop. If yes, briefly
 // highlight Mojo and update the tagline so the rep knows where the lead came from.
 function detectMojoScreenPop() {
@@ -7214,6 +7295,8 @@ try { loadFromFubSDK(); } catch (e) { console.warn("loadFromFubSDK failed:", e);
 try { startActiveCallPolling(); } catch (e) { console.warn("startActiveCallPolling failed:", e); }
 // Detect if we arrived via Mojo screen-pop, light up that dot accordingly.
 try { detectMojoScreenPop(); } catch (e) { console.warn("detectMojoScreenPop failed:", e); }
+// Wire up Enter key on the Quick Phone Lookup input.
+try { bindQuickPhoneLookup(); } catch (e) { console.warn("bindQuickPhoneLookup failed:", e); }
 </script>
 </body>
 </html>

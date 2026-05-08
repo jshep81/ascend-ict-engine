@@ -919,7 +919,8 @@ body.is-embed .app { display: none !important; }
   white-space: nowrap;
 }
 .fub-dropdown-btn:hover { background: var(--bg-soft, #f7f5ee); }
-.fub-caret { font-size: 9px; margin-left: 2px; opacity: 0.7; }
+.fub-caret { font-size: 12px; margin-left: 5px; font-weight: 700; color: var(--accent); display: inline-block; transition: transform 150ms ease; }
+.fub-dropdown-btn:hover .fub-caret { transform: translateY(1px); }
 .fub-dropdown-menu {
   position: absolute;
   right: 0;
@@ -1986,7 +1987,7 @@ button.next-btn-inline:hover {
             <button class="copy-fub-now-btn" id="copy-fub-now-btn" onclick="copyNotesToFubNow()" title="Push current notes to FUB now — keep typing, only new content goes in next time">↗ Copy to FUB now</button>
             <button class="copy-fub-now-btn" id="send-summary-btn" onclick="sendNoteToFUB()" title="Send the full structured call summary to FUB at wrap-up" style="background: #2c5f3f; border-color: #2c5f3f;">↗ Send Summary</button>
             <div class="fub-dropdown">
-              <button class="fub-dropdown-btn" id="fub-dropdown-btn" onclick="toggleFubDropdown(event)" title="Other FUB actions">FUB <span class="fub-caret">▾</span></button>
+              <button class="fub-dropdown-btn" id="fub-dropdown-btn" onclick="toggleFubDropdown(event)" title="More FUB actions">More FUB <span class="fub-caret">▼</span></button>
               <div class="fub-dropdown-menu" id="fub-dropdown-menu" style="display:none;">
                 <button onclick="syncTagsToFUB(); closeFubDropdown();">Sync Tags to FUB</button>
                 <button onclick="createFubTask(); closeFubDropdown();">Create Task in FUB</button>

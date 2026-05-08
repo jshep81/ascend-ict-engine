@@ -891,6 +891,32 @@ body.is-embed .app { display: none !important; }
   flex-wrap: wrap;
 }
 .notes-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.copy-fub-now-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 200ms;
+}
+.copy-fub-now-btn:hover { opacity: 0.92; }
+.copy-fub-now-btn:disabled { opacity: 0.55; cursor: wait; }
+.notes-pushed-banner {
+  background: #fef9e7;
+  border: 1px solid #f4d27a;
+  border-left: 3px solid #d99e2c;
+  color: #6f4f0a;
+  font-size: 12px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  border-radius: 6px;
+  line-height: 1.45;
+}
+.notes-pushed-banner strong { color: #4f3705; font-weight: 700; }
 .notes-prominent .notes-title-row {
   display: flex;
   align-items: baseline;
@@ -1922,9 +1948,11 @@ button.next-btn-inline:hover {
             <button class="dictate-btn" id="dictate-btn" onclick="toggleDictation()" title="Record post-call dictation — auto-fills captures + notes"><span class="dictate-icon">●</span> <span id="dictate-label">Dictate</span></button>
             <button class="ai-inline ghost" onclick="openAIPanel('polish')" title="Polish notes with AI"><span class="ai-inline-icon">✦</span> Polish</button>
             <button class="ai-inline ghost" onclick="openAIPanel()" title="Ask AI for help"><span class="ai-inline-icon">✦</span> Ask AI</button>
+            <button class="copy-fub-now-btn" id="copy-fub-now-btn" onclick="copyNotesToFubNow()" title="Push current notes to FUB now — keep typing, only new content goes in next time">↗ Copy to FUB now</button>
             <button class="next-btn-inline" id="notes-next-btn" onclick="goNext()" style="display:none;">Next →</button>
           </div>
         </div>
+        <div id="notes-pushed-banner" class="notes-pushed-banner" style="display:none;"></div>
         <textarea id="notes" placeholder="Specific properties referenced, communication preferences, anything that should follow this prospect into the tour..."></textarea>
         <div id="dictate-status" class="dictate-status" style="display:none;"></div>
       </section>
@@ -4662,6 +4690,9 @@ function resetCall() {
   state.currentStage = TRACKS[keepTrack].flow[0];
   PROGRESS_FLOW = TRACKS[keepTrack].flow.slice();
   saveState(); bindLeadInfo(); bindNotes(); bindInsight(); bindDNS(); renderAll();
+  // Reset the live-note push tracking so the new call doesn't diff against
+  // the previous call's notes.
+  try { resetNotesPushTracking(); } catch (e) {}
   toast("New call started");
 }
 
@@ -5103,6 +5134,107 @@ async function syncTagsToFUB() {
   } catch (err) {
     toast("FUB tag error: " + err.message);
   }
+}
+
+// ----------------------------------------------------------------------------
+// Copy notes to FUB NOW — for live in-call pushes.
+// First click: pushes the entire current notes block as a "live note" with
+// a timestamp. Snapshot is saved.
+// Subsequent clicks: pushes only the NEW content typed since the last push,
+// titled "Continued live note." If the rep edits earlier text instead of
+// appending, we fall back to pushing the whole thing fresh.
+// Yellow banner under the notes header confirms what's been sent and reminds
+// the rep that subsequent pushes only send new content.
+// ----------------------------------------------------------------------------
+async function copyNotesToFubNow() {
+  const personId = extractFubId(state.lead.fubId);
+  if (!personId) {
+    toast("Paste the FUB Lead URL first");
+    return;
+  }
+  const ta = document.getElementById("notes");
+  const currentNotes = ((ta && ta.value) || "").trim();
+  if (!currentNotes) {
+    toast("Nothing to send — notes are empty");
+    return;
+  }
+
+  // Determine what to send — full notes on first push, just the diff after.
+  const prevSnapshot = (state.notesLastPushedSnapshot || "").trim();
+  const isFirstPush = !prevSnapshot;
+  let toSend;
+  let header;
+  const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  if (isFirstPush) {
+    toSend = currentNotes;
+    header = `[Live call note — pushed during call at ${time}]`;
+  } else if (currentNotes.startsWith(prevSnapshot)) {
+    // Pure append — send only what's new.
+    toSend = currentNotes.slice(prevSnapshot.length).trim();
+    if (!toSend) {
+      toast("No new notes since last push");
+      return;
+    }
+    header = `[Continued live note — added at ${time}]`;
+  } else {
+    // Notes were edited mid-call (rare). Push the whole thing as a fresh note,
+    // labeled so the agent reading FUB knows there were edits.
+    toSend = currentNotes;
+    header = `[Live call note — re-pushed at ${time} after edits]`;
+  }
+
+  const noteText = `${header}\n\n${toSend}`;
+  const btn = document.getElementById("copy-fub-now-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+
+  try {
+    const res = await fetch("/api/fub-note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Ascend-Secret": ASCEND_AI_SECRET },
+      body: JSON.stringify({ personId, noteText })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    // Save snapshot so the next click only pushes new content.
+    state.notesLastPushedSnapshot = currentNotes;
+    state.notesLastPushedAt = Date.now();
+    saveState();
+    showNotesPushedBanner(time, isFirstPush);
+    toast(`Live note sent to FUB · ID ${data.noteId || ""}`);
+  } catch (err) {
+    toast("FUB error: " + err.message);
+    console.warn("[copyNotesToFubNow] failed:", err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↗ Copy to FUB now"; }
+  }
+}
+
+// Yellow banner that shows up after a successful live-note push. Stays
+// visible for the rest of the call so the rep doesn't forget what's already
+// in FUB. Updates each time a new push happens.
+function showNotesPushedBanner(time, wasFirstPush) {
+  const banner = document.getElementById("notes-pushed-banner");
+  if (!banner) return;
+  const msg = wasFirstPush
+    ? `<strong>✓ Notes pushed to FUB at ${time}.</strong> Keep typing — only new content will be added on the next "Copy to FUB now" click.`
+    : `<strong>✓ Continued notes pushed to FUB at ${time}.</strong> The previous block is already in FUB. Keep typing for the next push.`;
+  banner.innerHTML = msg;
+  banner.style.display = "block";
+}
+
+// Reset the snapshot when a new lead loads — otherwise the next call's
+// notes get diffed against the previous call's notes.
+function resetNotesPushTracking() {
+  if (state) {
+    state.notesLastPushedSnapshot = "";
+    state.notesLastPushedAt = 0;
+  }
+  const banner = document.getElementById("notes-pushed-banner");
+  if (banner) { banner.style.display = "none"; banner.innerHTML = ""; }
 }
 
 async function sendNoteToFUB() {
@@ -5643,65 +5775,136 @@ async function loadLeadBrief(personId) {
       return;
     }
 
-    // Step 2 — summarize via Haiku
+    // Step 2 — summarize via Haiku, with a hard 9-sec client timeout so we
+    // fail fast and show a clear error instead of leaving the rep hanging
+    // when the function is slow or thunderpath gets stuck.
     const userMessage = buildLeadBriefMessage(ctx);
-    const aiRes = await fetch(AI_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Ascend-Secret": ASCEND_AI_SECRET },
-      body: JSON.stringify({ action: "lead-brief", userMessage })
-    });
-    if (!aiRes.ok) {
-      const err = await aiRes.json().catch(() => ({}));
-      throw new Error(err.detail || err.error || `HTTP ${aiRes.status}`);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 9000);
+    try {
+      const aiRes = await fetch(AI_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Ascend-Secret": ASCEND_AI_SECRET },
+        body: JSON.stringify({ action: "lead-brief", userMessage }),
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (!aiRes.ok) {
+        const err = await aiRes.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `HTTP ${aiRes.status}`);
+      }
+      const aiData = await aiRes.json();
+      state.leadBrief.text = aiData.text || aiData.reply || "(no brief generated)";
+      state.leadBrief.state = "ready";
+      state.leadBrief.fetchedAt = Date.now();
+      saveState();
+      renderLeadBrief();
+    } catch (innerErr) {
+      clearTimeout(timer);
+      if (innerErr.name === "AbortError") {
+        throw new Error("Brief took too long (>9s). Try again or open the lead in FUB directly.");
+      }
+      throw innerErr;
     }
-    const aiData = await aiRes.json();
-    state.leadBrief.text = aiData.text || aiData.reply || "(no brief generated)";
-    state.leadBrief.state = "ready";
-    state.leadBrief.fetchedAt = Date.now();
-    saveState();
-    renderLeadBrief();
   } catch (err) {
     state.leadBrief.state = "error";
-    state.leadBrief.text = String(err.message || err).slice(0, 200);
+    state.leadBrief.text = String(err.message || err).slice(0, 250);
     renderLeadBrief();
+    console.warn("[lead-brief] generation failed:", err);
   }
 }
 
 // Builds a compact text payload of FUB context for Haiku to summarize.
 function buildLeadBriefMessage(ctx) {
+  // Categorize events into signal buckets so the AI brief surfaces buying
+  // signals first instead of getting buried in raw activity logs. Caps total
+  // events in the prompt so we don't time out on noisy leads.
   const lines = [];
   const p = ctx.person || {};
-  lines.push(`LEAD: ${p.name || "(no name)"} — ${p.source || "no source"} — Stage: ${p.stage || "—"}`);
+  lines.push(`LEAD: ${p.name || "(no name)"} — Source: ${p.source || "—"} — Stage: ${p.stage || "—"}`);
   if (p.created) lines.push(`Created: ${p.created}`);
   if (p.lastActivity) lines.push(`Last activity: ${p.lastActivity}`);
-  if (p.tags && p.tags.length) lines.push(`Tags: ${p.tags.join(", ")}`);
+  if (p.tags && p.tags.length) lines.push(`Tags: ${p.tags.slice(0, 8).join(", ")}`);
   lines.push("");
-  if (ctx.notes && ctx.notes.length) {
-    lines.push(`RECENT FUB NOTES (${ctx.notes.length}):`);
-    ctx.notes.forEach(n => {
-      lines.push(`- [${n.created}] ${n.author ? `(${n.author}) ` : ""}${n.subject ? n.subject + " — " : ""}${(n.body || "").replace(/\s+/g, " ").slice(0, 400)}`);
+
+  // ---------- Bucket events by signal type ----------
+  const events = ctx.events || [];
+  const isSearch = (e) => /search|saved.*search|criteria/i.test(e.type || e.message || "");
+  const isPropertyView = (e) => e.property && (e.property.street || e.property.address);
+  const isContact = (e) => /call|sms|email|text|message|inbound|outbound/i.test(e.type || "");
+  const isFormSubmit = (e) => /form|inquiry|registration|sign.?up|lead.?created/i.test(e.type || e.message || "");
+
+  const searches = events.filter(isSearch).slice(0, 3);
+  const propertyViews = events.filter(isPropertyView).slice(0, 6);
+  const contacts = events.filter(isContact).slice(0, 4);
+  const formSubmits = events.filter(isFormSubmit).slice(0, 2);
+
+  const formatPropertyEvent = (e) => {
+    let line = `- [${e.created || ""}] ${e.type || ""}`;
+    if (e.source) line += ` via ${e.source}`;
+    if (e.property) {
+      const street = e.property.street || e.property.address;
+      if (street) line += ` — ${street}`;
+      if (e.property.city) line += `, ${e.property.city}`;
+      if (e.property.price) line += ` · $${e.property.price}`;
+      const specs = [];
+      if (e.property.beds) specs.push(`${e.property.beds}bd`);
+      if (e.property.baths) specs.push(`${e.property.baths}ba`);
+      if (e.property.sqft) specs.push(`${e.property.sqft}sqft`);
+      if (specs.length) line += ` · ${specs.join("/")}`;
+    }
+    return line;
+  };
+
+  // ---------- Surface the most actionable signals first ----------
+  if (searches.length) {
+    lines.push("SAVED / RECENT SEARCHES (buying-criteria signal — highest priority):");
+    searches.forEach(e => {
+      let line = `- [${e.created || ""}] ${e.type || "search"}`;
+      if (e.source) line += ` via ${e.source}`;
+      if (e.message) line += ` — ${e.message.replace(/\s+/g, " ").slice(0, 250)}`;
+      lines.push(line);
     });
     lines.push("");
   }
-  if (ctx.events && ctx.events.length) {
-    lines.push(`RECENT ACTIVITY EVENTS (${ctx.events.length}, newest first):`);
-    ctx.events.forEach(e => {
-      let line = `- [${e.created}] ${e.type || ""}`;
-      if (e.source) line += ` (${e.source})`;
-      if (e.property && (e.property.street || e.property.address)) {
-        const street = e.property.street || e.property.address;
-        line += ` — ${street}`;
-        if (e.property.city) line += `, ${e.property.city}`;
-        if (e.property.price) line += ` · $${e.property.price}`;
-        if (e.property.beds) line += ` · ${e.property.beds}bd`;
-        if (e.property.baths) line += `/${e.property.baths}ba`;
-        if (e.property.sqft) line += ` · ${e.property.sqft}sqft`;
-      } else if (e.message) {
-        line += ` — ${e.message.replace(/\s+/g, " ").slice(0, 200)}`;
-      }
+
+  if (propertyViews.length) {
+    lines.push(`PROPERTY VIEWS / SAVES (${propertyViews.length} most recent):`);
+    propertyViews.forEach(e => lines.push(formatPropertyEvent(e)));
+    lines.push("");
+  }
+
+  if (formSubmits.length) {
+    lines.push("FORM / INQUIRY SUBMISSIONS:");
+    formSubmits.forEach(e => {
+      let line = `- [${e.created || ""}] ${e.type || ""}`;
+      if (e.source) line += ` via ${e.source}`;
+      if (e.message) line += ` — ${e.message.replace(/\s+/g, " ").slice(0, 200)}`;
       lines.push(line);
     });
+    lines.push("");
   }
+
+  if (contacts.length) {
+    lines.push(`RECENT CONTACT TOUCHES (${contacts.length}):`);
+    contacts.forEach(e => {
+      let line = `- [${e.created || ""}] ${e.type || ""}`;
+      if (e.message) line += ` — ${e.message.replace(/\s+/g, " ").slice(0, 150)}`;
+      lines.push(line);
+    });
+    lines.push("");
+  }
+
+  // ---------- Notes (last 3, body trimmed hard) ----------
+  if (ctx.notes && ctx.notes.length) {
+    const notes = ctx.notes.slice(0, 3);
+    lines.push(`RECENT FUB NOTES (${notes.length}):`);
+    notes.forEach(n => {
+      const body = (n.body || "").replace(/\s+/g, " ").slice(0, 300);
+      lines.push(`- [${n.created || ""}] ${n.author ? `(${n.author}) ` : ""}${n.subject ? n.subject + " — " : ""}${body}`);
+    });
+  }
+
   return lines.join("\n");
 }
 

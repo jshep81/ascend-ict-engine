@@ -5372,31 +5372,81 @@ function populateRepNameDropdown() {
     return;
   }
 
-  // Show ALL active users, but sort by toggle match first so the right people surface at the top.
-  // This is the stop-fighting-FUB-roles approach — if the API returns weird role strings,
-  // the rep can still pick their own name without us guessing wrong.
-  const active = (fubUsersCache || []).filter(u => u.status !== "Disabled" && u.status !== "Inactive");
-  const matched = active.filter(roleFilter);
-  const matchedIds = new Set(matched.map(u => u.id));
-  const others = active.filter(u => !matchedIds.has(u.id));
+  // ============================================================================
+  // ICT ROSTER — hardcoded allowlist for the 7 inside conversion team members.
+  // Edit this array when you hire / fire / promote. Match is case-insensitive
+  // and tolerant of partial matches (full name OR first+last).
+  // ============================================================================
+  const ASCEND_ICT_ROSTER = [
+    "Adam Williams",
+    "Jean Guinang",
+    "Ben Lawrence Jr",
+    "Rao Hamza",
+    "Mary Lawrence",
+    // Add the two new hires here:
+    // "First Last",
+    // "First Last",
+  ];
 
-  const renderOpt = (u, isMatched) => {
+  const active = (fubUsersCache || []).filter(u => u.status !== "Disabled" && u.status !== "Inactive");
+
+  const renderOpt = (u) => {
     const display = u.name || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || `User ${u.id}`;
     const value = u.firstName || display;
     const safeVal = String(value).replace(/"/g, "&quot;");
     const isSel = stored === value || stored === display;
-    const roleHint = (u.role || "").trim();
-    const tail = roleHint ? ` — ${roleHint}` : "";
-    return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}${tail}</option>`;
+    return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}</option>`;
   };
+
+  // ICT mode: show ONLY the hardcoded roster. No agents, no others.
+  if (state.role !== "agent") {
+    const rosterLower = ASCEND_ICT_ROSTER.map(n => n.toLowerCase().trim());
+    const ictMatches = active.filter(u => {
+      const full = (u.name || "").toLowerCase().trim();
+      const composed = [(u.firstName || ""), (u.lastName || "")].join(" ").toLowerCase().trim();
+      return rosterLower.some(r => r === full || r === composed || full.includes(r));
+    });
+    // Order matches by the roster order (so newest hire isn't at the top by FUB ID).
+    ictMatches.sort((a, b) => {
+      const ai = rosterLower.findIndex(r => (a.name || "").toLowerCase().includes(r));
+      const bi = rosterLower.findIndex(r => (b.name || "").toLowerCase().includes(r));
+      return ai - bi;
+    });
+    let html = `<option value="">— select —</option>`;
+    if (ictMatches.length) {
+      html += `<optgroup label="Inside Conversion Team">` + ictMatches.map(renderOpt).join("") + `</optgroup>`;
+    } else {
+      html += `<option value="" disabled>No ICTs matched. Check ASCEND_ICT_ROSTER list.</option>`;
+    }
+    sel.innerHTML = html;
+    return;
+  }
+
+  // Agent mode: keep the existing behavior — match by FUB role tags, fall back to "others".
+  const matched = active.filter(roleFilter);
+  const matchedIds = new Set(matched.map(u => u.id));
+  const others = active.filter(u => !matchedIds.has(u.id));
 
   let html = `<option value="">— select —</option>`;
   if (matched.length) {
-    const groupLabel = state.role === "agent" ? "Agents / Brokers" : "ICTs / ISAs";
-    html += `<optgroup label="${groupLabel}">` + matched.map(u => renderOpt(u, true)).join("") + `</optgroup>`;
+    html += `<optgroup label="Agents / Brokers">` + matched.map(u => {
+      const display = u.name || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || `User ${u.id}`;
+      const value = u.firstName || display;
+      const safeVal = String(value).replace(/"/g, "&quot;");
+      const isSel = stored === value || stored === display;
+      const roleHint = (u.role || "").trim();
+      const tail = roleHint ? ` — ${roleHint}` : "";
+      return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}${tail}</option>`;
+    }).join("") + `</optgroup>`;
   }
   if (others.length) {
-    html += `<optgroup label="Other Team Members">` + others.map(u => renderOpt(u, false)).join("") + `</optgroup>`;
+    html += `<optgroup label="Other Team Members">` + others.map(u => {
+      const display = u.name || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || `User ${u.id}`;
+      const value = u.firstName || display;
+      const safeVal = String(value).replace(/"/g, "&quot;");
+      const isSel = stored === value || stored === display;
+      return `<option value="${safeVal}" ${isSel ? "selected" : ""}>${display}</option>`;
+    }).join("") + `</optgroup>`;
   }
   sel.innerHTML = html;
 }

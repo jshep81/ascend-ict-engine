@@ -4938,6 +4938,25 @@ function bindLeadInfo() {
     populateRepNameDropdown();
     repSel.addEventListener("change", () => {
       try { localStorage.setItem("ASCEND_REP_NAME", repSel.value); } catch (e) {}
+      // Auto-derive the rep's email from the FUB users list and persist it
+      // for the Callingly auto-pop poller. The poller keys off email since
+      // names in FUB don't always match the dropdown label cleanly.
+      try {
+        const repName = (repSel.value || "").trim().toLowerCase();
+        const users = (typeof fubUsersCache !== "undefined" && fubUsersCache) ? fubUsersCache : [];
+        const match = users.find(u => {
+          const full = (u.name || "").toLowerCase().trim();
+          const first = (u.firstName || "").toLowerCase().trim();
+          // Try several match styles: exact full name, exact first, startsWith
+          return full === repName || first === repName || full.startsWith(repName) || repName.startsWith(first);
+        });
+        if (match && match.email) {
+          localStorage.setItem("ASCEND_REP_EMAIL", match.email.toLowerCase().trim());
+          console.log("[Auto-pop] Rep email set to", match.email, "for", repSel.value);
+        } else {
+          console.warn("[Auto-pop] Could not match rep", repSel.value, "to a FUB user. Set ASCEND_REP_EMAIL manually in localStorage.");
+        }
+      } catch (e) { console.warn("[Auto-pop] email derivation failed:", e); }
       renderScript();
     });
   }

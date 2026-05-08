@@ -554,12 +554,18 @@ body.is-embed .app { display: none !important; }
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 2.6fr) minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px 20px;
-  max-width: 1600px;
+  gap: 16px;
+  padding: 14px 24px;
   width: 100%;
-  margin: 0 auto;
   overflow: hidden;
+}
+/* On very wide monitors, give the right rail a bit more breathing room
+   so the auto-pop / DNS / brief panels don't feel cramped. */
+@media (min-width: 1700px) {
+  .workspace { grid-template-columns: 260px minmax(0, 2.4fr) minmax(360px, 1fr); padding: 14px 32px; gap: 20px; }
+}
+@media (min-width: 2200px) {
+  .workspace { grid-template-columns: 280px minmax(0, 2.2fr) minmax(420px, 1fr); padding: 14px 48px; gap: 24px; }
 }
 .left-rail, main, .right-rail { min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
 .left-rail::-webkit-scrollbar, main::-webkit-scrollbar, .right-rail::-webkit-scrollbar { width: 6px; }

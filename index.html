@@ -6907,6 +6907,9 @@ async function autoLoadFromEmbedParams() {
   const isLiteralTag = (v) => typeof v === "string" && /^\{[^}]+\}$/.test(v);
   Object.keys(params).forEach(k => { if (isLiteralTag(params[k])) delete params[k]; });
   if (!params.personId) return false;
+  // New lead inbound — wipe live-note push tracking so we don't diff this
+  // call's notes against the prior call's snapshot.
+  try { resetNotesPushTracking(); } catch (e) {}
   // Stash the early hints right away so the UI feels responsive
   // even before the FUB context fetch comes back.
   state.lead = state.lead || {};
